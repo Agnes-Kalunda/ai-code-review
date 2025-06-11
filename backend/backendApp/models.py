@@ -56,8 +56,75 @@ class CodeReview(models.Model):
             except Exception:
                 return None
         return self.code_content
+    
+class AnalysisMetrics(models.Model):
+    
+    review = models.OneToOneField(CodeReview, on_delete=models.CASCADE, related_name='metrics')
+    
+    
+    complexity_score = models.FloatField(null=True, blank=True)
+    maintainability_score = models.FloatField(null=True, blank=True)
+    security_score = models.FloatField(null=True, blank=True)
+    performance_score = models.FloatField(null=True, blank=True)
 
+    critical_issues = models.PositiveIntegerField(default=0)
+    major_issues = models.PositiveIntegerField(default=0)
+    minor_issues = models.PositiveIntegerField(default=0)
+    suggestions = models.PositiveIntegerField(default=0)
+    
 
+    pylint_score = models.FloatField(null=True, blank=True)
+    flake8_violations = models.PositiveIntegerField(default=0)
+    security_vulnerabilities = models.PositiveIntegerField(default=0)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Metrics for {self.review}"
+    
+    
+class ReviewFeedback(models.Model):
+    
+    SEVERITY_CHOICES = [
+        ('critical', 'Critical'),
+        ('major', 'Major'),
+        ('minor', 'Minor'),
+        ('suggestion', 'Suggestion'),
+    ]
+    
+    CATEGORY_CHOICES = [
+        ('bug', 'Potential Bug'),
+        ('security', 'Security Issue'),
+        ('performance', 'Performance'),
+        ('style', 'Code Style'),
+        ('structure', 'Code Structure'),
+        ('best_practice', 'Best Practice'),
+        ('documentation', 'Documentation'),
+    ]
+    
+    review = models.ForeignKey(CodeReview, on_delete=models.CASCADE, related_name='feedback_items')
+    
+    severity = models.CharField(max_length=20, choices=SEVERITY_CHOICES)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    suggestion = models.TextField(null=True, blank=True)
+    
+    line_number = models.PositiveIntegerField(null=True, blank=True)
+    column_number = models.PositiveIntegerField(null=True, blank=True)
+    code_snippet = models.TextField(null=True, blank=True)
+    
+
+    confidence_score = models.FloatField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['severity', '-created_at']
+    
+    def __str__(self):
+        return f"{self.severity}: {self.title}"
 
 
 
