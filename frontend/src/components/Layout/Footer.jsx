@@ -2,6 +2,8 @@ import React from 'react';
 import { Code2, Github, ExternalLink } from 'lucide-react';
 
 const Footer = () => {
+  const currentYear = new Date().getFullYear();
+  
   return (
     <footer className="bg-white border-t border-gray-200 mt-auto">
       <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
@@ -38,16 +40,7 @@ const Footer = () => {
               Resources
             </h3>
             <div className="space-y-2">
-              <a
-                href="https://github.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center space-x-2 text-sm text-gray-600 hover:text-primary-600 transition-colors"
-              >
-                <Github className="h-4 w-4" />
-                <span>GitHub</span>
-                <ExternalLink className="h-3 w-3" />
-              </a>
+              
               <a
                 href="https://docs.python.org/3/"
                 target="_blank"
@@ -74,7 +67,16 @@ const Footer = () => {
         <div className="mt-8 pt-8 border-t border-gray-200">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="text-sm text-gray-500">
-              © 2024 AI Code Review. Built with React, Django, and OpenAI.
+              © {currentYear} AI Code Review by{' '}
+              <a
+                href="https://github.com/YOUR_GITHUB_USERNAME"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary-600 hover:text-primary-700 transition-colors"
+              >
+                Agnes
+              </a>
+              . Built with React, Django, and OpenAI.
             </div>
             <div className="flex items-center space-x-4 mt-4 md:mt-0">
               <span className="text-sm text-gray-500">
