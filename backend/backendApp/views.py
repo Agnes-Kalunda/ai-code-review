@@ -1,353 +1,190 @@
-from rest_framework import viewsets, status, views
+
+from rest_framework import status, viewsets, views
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from django.utils import timezone
 from django.db import transaction
-from django.shortcuts import get_object_or_404
-from django.db.models import Count, Q
+from django.utils import timezone
+from django.db.models import Count
 import logging
 
-from .models import CodeReview, AnalysisMetrics, ReviewFeedback
+from .models import ChatSession, ChatMessage
 from .serializers import (
-    CodeReviewSerializer, CodeReviewCreateSerializer, 
-    CodeReviewListSerializer, CodeAnalysisRequestSerializer,
-    ReviewFeedbackSerializer, AnalysisMetricsSerializer
+    ChatSessionSerializer, ChatSessionListSerializer, 
+    ChatMessageSerializer, SendMessageSerializer
 )
+from .services.ai_service import CodingChatAI
 
-try:
-    from .services.ai_analyzer import AICodeAnalyzer
-except ImportError:
-    AICodeAnalyzer = None
+logger = logging.getLogger(__name__)
 
-logger = logging.getLogger('backendApp')
-
-class SessionTrackingMixin:
-    """Mixin to add session tracking to views"""
+class ChatSessionViewSet(viewsets.ModelViewSet):
     
-    def get_user_session_data(self):
-        """Get session data for user"""
-        if not self.request.session.session_key:
-            self.request.session.create()
-        
-        session_data = {
-            'session_key': self.request.session.session_key,
-            'reviews_created': self.request.session.get('user_reviews', []),
-            'last_activity': self.request.session.get('last_activity'),
-        }
-        
-        # Update last activity
-        self.request.session['last_activity'] = timezone.now().isoformat()
-        self.request.session.modified = True
-        
-        return session_data
-    
-    def log_user_activity(self, action, details=None):
-        """Log user activity with session info"""
-        session_data = self.get_user_session_data()
-        
-        log_message = f"Session {session_data['session_key']}: {action}"
-        if details:
-            log_message += f" - {details}"
-        
-        logger.info(log_message)
-
-class CodeReviewViewSet(SessionTrackingMixin, viewsets.ModelViewSet):
-    """
-    ViewSet for managing code reviews
-    Provides CRUD operations and custom actions
-    """
-    queryset = CodeReview.objects.all()
-    parser_classes = [MultiPartParser, FormParser, JSONParser]
-    lookup_field = 'id'
     
     def get_serializer_class(self):
-        """Return appropriate serializer based on action"""
-        if self.action == 'create':
-            return CodeReviewCreateSerializer
-        elif self.action == 'list':
-            return CodeReviewListSerializer
-        return CodeReviewSerializer
+        if self.action == 'list':
+            return ChatSessionListSerializer
+        return ChatSessionSerializer
     
     def get_queryset(self):
-        """Filter queryset based on session (optional)"""
-        queryset = CodeReview.objects.all()
+        """Filter sessions by current user's session"""
+        session_key = self.request.session.session_key
+        if not session_key:
+            return ChatSession.objects.none()
         
-        
-        show_user_only = self.request.query_params.get('user_only', 'false').lower() == 'true'
-        if show_user_only:
-            user_reviews = self.request.session.get('user_reviews', [])
-            if user_reviews:
-                queryset = queryset.filter(id__in=user_reviews)
-        
-        
-        status_filter = self.request.query_params.get('status')
-        if status_filter:
-            queryset = queryset.filter(status=status_filter)
-        
-        language_filter = self.request.query_params.get('language')
-        if language_filter:
-            queryset = queryset.filter(language=language_filter)
-        
-        return queryset.order_by('-created_at')
-    
-    def list(self, request, *args, **kwargs):
-        """List code reviews with session tracking"""
-        self.log_user_activity("Viewed reviews list")
-        return super().list(request, *args, **kwargs)
-    
-    def retrieve(self, request, *args, **kwargs):
-        """Retrieve specific code review"""
-        instance = self.get_object()
-        self.log_user_activity("Viewed review details", f"Review ID: {instance.id}")
-        return super().retrieve(request, *args, **kwargs)
+        return ChatSession.objects.filter(
+            session_key=session_key
+        ).prefetch_related('messages')
     
     def create(self, request, *args, **kwargs):
-        """Create new code review with session tracking"""
-        self.log_user_activity("Creating new code review")
+
+        if not request.session.session_key:
+            request.session.create()
         
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-    
-        review = serializer.save()
-        
-    
-        if 'user_reviews' not in request.session:
-            request.session['user_reviews'] = []
-        
-        request.session['user_reviews'].append(str(review.id))
-        request.session.modified = True
-        
-        self.log_user_activity("Created code review", f"Review ID: {review.id}")
-        
-        
-        auto_analyze = request.data.get('auto_analyze', 'true').lower() == 'true'
-        if auto_analyze:
-            self.log_user_activity("Starting automatic analysis", f"Review ID: {review.id}")
-            self._trigger_analysis(review)
-        
-        headers = self.get_success_headers(serializer.data)
-        return Response(
-            CodeReviewSerializer(review).data, 
-            status=status.HTTP_201_CREATED, 
-            headers=headers
+        session = ChatSession.objects.create(
+            session_key=request.session.session_key,
+            title="New Chat"
         )
-    
-    def destroy(self, request, *args, **kwargs):
-        """Delete code review with session tracking"""
-        instance = self.get_object()
-        self.log_user_activity("Deleting code review", f"Review ID: {instance.id}")
         
-    
-        user_reviews = request.session.get('user_reviews', [])
-        if str(instance.id) in user_reviews:
-            user_reviews.remove(str(instance.id))
-            request.session['user_reviews'] = user_reviews
-            request.session.modified = True
-        
-        return super().destroy(request, *args, **kwargs)
+        serializer = ChatSessionSerializer(session)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
     
     @action(detail=True, methods=['post'])
-    def analyze(self, request, id=None):
-        """Manually trigger analysis for a specific review"""
-        review = self.get_object()
-        
-        if review.status == 'analyzing':
-            return Response(
-                {'error': 'Analysis already in progress'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        self.log_user_activity("Manual analysis triggered", f"Review ID: {review.id}")
-        self._trigger_analysis(review)
-        
-        return Response(
-            {'message': 'Analysis started', 'review_id': str(review.id)},
-            status=status.HTTP_202_ACCEPTED
-        )
+    def send_message(self, request, pk=None):
     
-    @action(detail=True, methods=['get'])
-    def feedback(self, request, id=None):
-        """Get detailed feedback for a review"""
-        review = self.get_object()
-        feedback_items = ReviewFeedback.objects.filter(review=review)
+        session = self.get_object()
+        serializer = SendMessageSerializer(data=request.data)
         
-        serializer = ReviewFeedbackSerializer(feedback_items, many=True)
-        return Response(serializer.data)
-    
-    @action(detail=True, methods=['get'])
-    def metrics(self, request, id=None):
-        """Get metrics for a review"""
-        review = self.get_object()
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        user_message = serializer.validated_data['message']
         
         try:
-            metrics = AnalysisMetrics.objects.get(review=review)
-            serializer = AnalysisMetricsSerializer(metrics)
-            return Response(serializer.data)
-        except AnalysisMetrics.DoesNotExist:
-            return Response(
-                {'error': 'Metrics not available'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-    
-    @action(detail=False, methods=['get'])
-    def stats(self, request):
-        """Get overall statistics"""
-        stats = {
-            'total_reviews': CodeReview.objects.count(),
-            'completed_reviews': CodeReview.objects.filter(status='completed').count(),
-            'pending_reviews': CodeReview.objects.filter(status='pending').count(),
-            'analyzing_reviews': CodeReview.objects.filter(status='analyzing').count(),
-            'failed_reviews': CodeReview.objects.filter(status='failed').count(),
-        }
-        
-    
-        language_stats = CodeReview.objects.values('language').annotate(
-            count=Count('language')
-        ).order_by('-count')
-        stats['languages'] = list(language_stats)
-        
-        
-        from datetime import timedelta
-        thirty_days_ago = timezone.now() - timedelta(days=30)
-        
-        stats['recent_activity'] = {
-            'reviews_last_30_days': CodeReview.objects.filter(
-                created_at__gte=thirty_days_ago
-            ).count(),
-            'completed_last_30_days': CodeReview.objects.filter(
-                status='completed',
-                analysis_completed_at__gte=thirty_days_ago
-            ).count()
-        }
-        
-        user_reviews = request.session.get('user_reviews', [])
-        stats['user_session'] = {
-            'reviews_in_session': len(user_reviews),
-            'session_key': request.session.session_key
-        }
-        
-        return Response(stats)
-    
-    @action(detail=False, methods=['post'])
-    def bulk_analyze(self, request):
-        """Trigger analysis for multiple reviews"""
-        review_ids = request.data.get('review_ids', [])
-        
-        if not review_ids:
-            return Response(
-                {'error': 'No review IDs provided'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        reviews = CodeReview.objects.filter(
-            id__in=review_ids,
-            status__in=['pending', 'failed']
-        )
-        
-        triggered_count = 0
-        for review in reviews:
-            self._trigger_analysis(review)
-            triggered_count += 1
-        
-        self.log_user_activity("Bulk analysis triggered", f"{triggered_count} reviews")
-        
-        return Response({
-            'message': f'Analysis started for {triggered_count} reviews',
-            'triggered_reviews': triggered_count
-        })
-    
-    def _trigger_analysis(self, review):
-        """Trigger analysis for a code review"""
-        try:
-            if not AICodeAnalyzer:
-                logger.error("AI Analyzer not available")
-                review.status = 'failed'
-                review.error_message = "AI Analyzer service not available"
-                review.save()
-                return
-            
-            review.status = 'analyzing'
-            review.save()
-            
-    
-            code_content = review.get_code_content
-            if not code_content:
-                review.status = 'failed'
-                review.error_message = "Could not read code content"
-                review.save()
-                return
-            
-
-            analyzer = AICodeAnalyzer()
-            analysis_results = analyzer.analyze_code(code_content, review.language)
-            
-            if 'error' in analysis_results:
-                review.status = 'failed'
-                review.error_message = analysis_results['error']
-                review.save()
-                return
-            
-            
             with transaction.atomic():
-                review.ai_analysis = analysis_results.get('ai_analysis', {})
-                review.static_analysis = analysis_results.get('static_analysis', {})
-                review.analysis_summary = self._generate_summary(analysis_results)
-                review.status = 'completed'
-                review.analysis_completed_at = timezone.now()
-                review.save()
+                
+                user_msg = ChatMessage.objects.create(
+                    session=session,
+                    message_type='user',
+                    content=user_message
+                )
                 
             
-                metrics_data = analysis_results.get('metrics', {})
-                AnalysisMetrics.objects.update_or_create(
-                    review=review,
-                    defaults=metrics_data
+                if session.messages.count() == 1 and session.title == "New Chat":
+                    ai_service = CodingChatAI()
+                    session.title = ai_service.generate_session_title(user_message)
+                    session.save()
+                
+                
+                conversation_history = session.messages.order_by('created_at')
+                
+            
+                ai_service = CodingChatAI()
+                ai_result = ai_service.get_response(user_message, conversation_history)
+                
+                
+                assistant_msg = ChatMessage.objects.create(
+                    session=session,
+                    message_type='assistant',
+                    content=ai_result['response'],
+                    tokens_used=ai_result.get('tokens_used'),
+                    response_time=ai_result.get('response_time')
+                )
+                
+        
+                session.updated_at = timezone.now()
+                session.save()
+                
+                return Response({
+                    'user_message': ChatMessageSerializer(user_msg).data,
+                    'assistant_message': ChatMessageSerializer(assistant_msg).data,
+                    'session': ChatSessionSerializer(session).data
+                })
+        
+        except Exception as e:
+            logger.error(f"Error in send_message: {str(e)}")
+            return Response(
+                {'error': 'Failed to process message'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class QuickChatView(views.APIView):
+    
+    
+    def post(self, request):
+    
+        serializer = SendMessageSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        user_message = serializer.validated_data['message']
+        session_id = serializer.validated_data.get('session_id')
+        
+        try:
+        
+            if not request.session.session_key:
+                request.session.create()
+            
+            
+            if session_id:
+                try:
+                    session = ChatSession.objects.get(
+                        id=session_id,
+                        session_key=request.session.session_key
+                    )
+                except ChatSession.DoesNotExist:
+                    session = ChatSession.objects.create(
+                        session_key=request.session.session_key,
+                        title="Quick Chat"
+                    )
+            else:
+                session = ChatSession.objects.create(
+                    session_key=request.session.session_key,
+                    title="Quick Chat"
+                )
+            
+            with transaction.atomic():
+            
+                user_msg = ChatMessage.objects.create(
+                    session=session,
+                    message_type='user',
+                    content=user_message
                 )
                 
                 
-                ReviewFeedback.objects.filter(review=review).delete()
-                feedback_items = analysis_results.get('feedback_items', [])
-                for item in feedback_items:
-                    ReviewFeedback.objects.create(
-                        review=review,
-                        **item
-                    )
+                if session.messages.count() == 1:
+                    ai_service = CodingChatAI()
+                    session.title = ai_service.generate_session_title(user_message)
+                    session.save()
+                
             
-            logger.info(f"Analysis completed successfully for review {review.id}")
+                conversation_history = session.messages.order_by('created_at')
+                
+            
+                ai_service = CodingChatAI()
+                ai_result = ai_service.get_response(user_message, conversation_history)
+                
+                
+                assistant_msg = ChatMessage.objects.create(
+                    session=session,
+                    message_type='assistant',
+                    content=ai_result['response'],
+                    tokens_used=ai_result.get('tokens_used'),
+                    response_time=ai_result.get('response_time')
+                )
+                
+                return Response({
+                    'user_message': ChatMessageSerializer(user_msg).data,
+                    'assistant_message': ChatMessageSerializer(assistant_msg).data,
+                    'session_id': str(session.id),
+                    'success': ai_result['success']
+                })
         
         except Exception as e:
-            logger.error(f"Analysis failed for review {review.id}: {str(e)}", exc_info=True)
-            review.status = 'failed'
-            review.error_message = str(e)
-            review.save()
-    
-    def _generate_summary(self, analysis_results):
-        """Generate a summary from analysis results"""
-        summary_parts = []
-        
-        # AI analysis summary
-        if 'ai_analysis' in analysis_results and 'summary' in analysis_results['ai_analysis']:
-            summary_parts.append(analysis_results['ai_analysis']['summary'])
-        
-        # Metrics summary
-        if 'metrics' in analysis_results:
-            metrics = analysis_results['metrics']
-            critical = metrics.get('critical_issues', 0)
-            major = metrics.get('major_issues', 0)
-            minor = metrics.get('minor_issues', 0)
-            
-            if critical > 0:
-                summary_parts.append(f"Found {critical} critical issue(s) that need immediate attention.")
-            if major > 0:
-                summary_parts.append(f"Found {major} major issue(s) that should be addressed.")
-            if minor > 0:
-                summary_parts.append(f"Found {minor} minor issue(s) for improvement.")
-            
-            if critical == 0 and major == 0:
-                summary_parts.append("No critical or major issues found. Good work!")
-        
-        return " ".join(summary_parts) if summary_parts else "Analysis completed successfully."
+            logger.error(f"Error in quick_chat: {str(e)}")
+            return Response(
+                {'error': 'Failed to process message'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class SessionManagementView(views.APIView):
     """Manage user sessions"""
@@ -357,45 +194,92 @@ class SessionManagementView(views.APIView):
         if not request.session.session_key:
             request.session.create()
         
+        # Get session stats
+        chat_sessions = ChatSession.objects.filter(
+            session_key=request.session.session_key
+        )
+        
+        total_messages = ChatMessage.objects.filter(
+            session__session_key=request.session.session_key
+        ).count()
+        
         session_data = {
             'session_key': request.session.session_key,
-            'user_reviews': request.session.get('user_reviews', []),
-            'last_activity': request.session.get('last_activity'),
-            'session_age': request.session.get_session_cookie_age(),
-            'created_reviews_count': len(request.session.get('user_reviews', [])),
+            'chat_sessions_count': chat_sessions.count(),
+            'total_messages': total_messages,
+            'created_reviews_count': total_messages,  # For frontend compatibility
+            'last_activity': request.session.get('last_activity', timezone.now().isoformat()),
         }
         
-        logger.info(f"Session info accessed: {request.session.session_key}")
         return Response(session_data)
     
     def delete(self, request):
-        """Clear session"""
+        """Clear session and all associated chats"""
         session_key = request.session.session_key
-        request.session.flush()
         
-        logger.info(f"Session cleared: {session_key}")
+        if session_key:
+            # Delete all chat sessions for this user session
+            ChatSession.objects.filter(session_key=session_key).delete()
+        
+        request.session.flush()
         return Response({'message': 'Session cleared successfully'})
 
-class HealthCheckView(views.APIView):
-    """Health check endpoint"""
+class StatsView(views.APIView):
+    """Get system statistics"""
     
     def get(self, request):
-        """Simple health check"""
-        health_data = {
-            'status': 'healthy',
-            'timestamp': timezone.now(),
-            'services': {
-                'database': self._check_database(),
-                'ai_analyzer': AICodeAnalyzer is not None,
+        """Get overall stats"""
+        
+        session_key = request.session.session_key
+        user_sessions = 0
+        user_messages = 0
+        
+        if session_key:
+            user_sessions = ChatSession.objects.filter(session_key=session_key).count()
+            user_messages = ChatMessage.objects.filter(
+                session__session_key=session_key
+            ).count()
+    
+        total_sessions = ChatSession.objects.count()
+        total_messages = ChatMessage.objects.count()
+        
+        stats = {
+            'total_reviews': total_sessions, 
+            'completed_reviews': total_sessions,
+            'analyzing_reviews': 0,
+            'recent_activity': {
+                'reviews_last_30_days': user_sessions,
+            },
+            'user_session_stats': {
+                'chat_sessions': user_sessions,
+                'total_messages': user_messages,
             }
         }
         
-        return Response(health_data)
+        return Response(stats)
+
+class HealthCheckView(views.APIView):
     
-    def _check_database(self):
-        """Check database connectivity"""
+    def get(self, request):
+
         try:
-            CodeReview.objects.count()
-            return True
-        except Exception:
-            return False
+    
+            ChatSession.objects.count()
+            
+            
+            ai_service = CodingChatAI()
+            
+            return Response({
+                'status': 'healthy',
+                'timestamp': timezone.now(),
+                'services': {
+                    'database': True,
+                    'openai': hasattr(ai_service, 'get_response'),
+                }
+            })
+        except Exception as e:
+            return Response({
+                'status': 'unhealthy',
+                'error': str(e),
+                'timestamp': timezone.now(),
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
