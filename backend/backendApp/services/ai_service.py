@@ -86,7 +86,10 @@ If asked about non-programming topics, politely redirect the conversation back t
         
         
         if conversation_history:
-            recent_history = conversation_history[-10:]  
+            
+            history_list = list(conversation_history)
+            recent_history = history_list[-10:] if len(history_list) > 10 else history_list
+            
             for msg in recent_history:
                 role = "user" if msg.message_type == "user" else "assistant"
                 messages.append({
