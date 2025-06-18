@@ -1,313 +1,240 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import apiService from '../services/api';
 import toast from 'react-hot-toast';
 
-
-const initialState = {
-  // Session data
-  session: null,
-  sessionLoading: false,
-  
-  
-  reviews: [],
-  reviewsLoading: false,
-  currentReview: null,
-  currentReviewLoading: false,
-  
-  
-  stats: null,
-  statsLoading: false,
-
-  isAnalyzing: false,
-  error: null,
-};
-
-
-const actionTypes = {
-  
-  SET_SESSION_LOADING: 'SET_SESSION_LOADING',
-  SET_SESSION: 'SET_SESSION',
-  CLEAR_SESSION: 'CLEAR_SESSION',
-  
-
-  SET_REVIEWS_LOADING: 'SET_REVIEWS_LOADING',
-  SET_REVIEWS: 'SET_REVIEWS',
-  ADD_REVIEW: 'ADD_REVIEW',
-  UPDATE_REVIEW: 'UPDATE_REVIEW',
-  DELETE_REVIEW: 'DELETE_REVIEW',
-  
-
-  SET_CURRENT_REVIEW_LOADING: 'SET_CURRENT_REVIEW_LOADING',
-  SET_CURRENT_REVIEW: 'SET_CURRENT_REVIEW',
-  CLEAR_CURRENT_REVIEW: 'CLEAR_CURRENT_REVIEW',
-  
-  
-  SET_STATS_LOADING: 'SET_STATS_LOADING',
-  SET_STATS: 'SET_STATS',
-  
-  
-  SET_ANALYZING: 'SET_ANALYZING',
-  SET_ERROR: 'SET_ERROR',
-  CLEAR_ERROR: 'CLEAR_ERROR',
-};
-
-
-function appReducer(state, action) {
-  switch (action.type) {
-    // Session reducers
-    case actionTypes.SET_SESSION_LOADING:
-      return { ...state, sessionLoading: action.payload };
-    
-    case actionTypes.SET_SESSION:
-      return { ...state, session: action.payload, sessionLoading: false };
-    
-    case actionTypes.CLEAR_SESSION:
-      return { ...state, session: null };
-    
-    
-    case actionTypes.SET_REVIEWS_LOADING:
-      return { ...state, reviewsLoading: action.payload };
-    
-    case actionTypes.SET_REVIEWS:
-      return { ...state, reviews: action.payload, reviewsLoading: false };
-    
-    case actionTypes.ADD_REVIEW:
-      return { 
-        ...state, 
-        reviews: [action.payload, ...state.reviews] 
-      };
-    
-    case actionTypes.UPDATE_REVIEW:
-      return {
-        ...state,
-        reviews: state.reviews.map(review =>
-          review.id === action.payload.id ? action.payload : review
-        ),
-        currentReview: state.currentReview?.id === action.payload.id 
-          ? action.payload 
-          : state.currentReview
-      };
-    
-    case actionTypes.DELETE_REVIEW:
-      return {
-        ...state,
-        reviews: state.reviews.filter(review => review.id !== action.payload),
-        currentReview: state.currentReview?.id === action.payload 
-          ? null 
-          : state.currentReview
-      };
-    
-
-    case actionTypes.SET_CURRENT_REVIEW_LOADING:
-      return { ...state, currentReviewLoading: action.payload };
-    
-    case actionTypes.SET_CURRENT_REVIEW:
-      return { 
-        ...state, 
-        currentReview: action.payload, 
-        currentReviewLoading: false 
-      };
-    
-    case actionTypes.CLEAR_CURRENT_REVIEW:
-      return { ...state, currentReview: null };
-    
-    
-    case actionTypes.SET_STATS_LOADING:
-      return { ...state, statsLoading: action.payload };
-    
-    case actionTypes.SET_STATS:
-      return { ...state, stats: action.payload, statsLoading: false };
-    
-    
-    case actionTypes.SET_ANALYZING:
-      return { ...state, isAnalyzing: action.payload };
-    
-    case actionTypes.SET_ERROR:
-      return { ...state, error: action.payload };
-    
-    case actionTypes.CLEAR_ERROR:
-      return { ...state, error: null };
-    
-    default:
-      return state;
-  }
-}
-
 const AppContext = createContext();
 
-
-export function AppProvider({ children }) {
-  const [state, dispatch] = useReducer(appReducer, initialState);
-  
-
-  const actions = {
-    
-    async fetchSession() {
-      dispatch({ type: actionTypes.SET_SESSION_LOADING, payload: true });
-      try {
-        const response = await apiService.getSession();
-        dispatch({ type: actionTypes.SET_SESSION, payload: response.data });
-      } catch (error) {
-        console.error('Failed to fetch session:', error);
-        dispatch({ type: actionTypes.SET_SESSION_LOADING, payload: false });
-      }
-    },
-    
-    async clearSession() {
-      try {
-        await apiService.clearSession();
-        dispatch({ type: actionTypes.CLEAR_SESSION });
-        toast.success('Session cleared successfully');
-      } catch (error) {
-        console.error('Failed to clear session:', error);
-      }
-    },
-    
-    
-    async fetchReviews(params = {}) {
-      dispatch({ type: actionTypes.SET_REVIEWS_LOADING, payload: true });
-      try {
-        const response = await apiService.getReviews(params);
-        dispatch({ type: actionTypes.SET_REVIEWS, payload: response.data.results || response.data });
-      } catch (error) {
-        console.error('Failed to fetch reviews:', error);
-        dispatch({ type: actionTypes.SET_REVIEWS_LOADING, payload: false });
-      }
-    },
-    
-    async createReview(reviewData) {
-      try {
-        const response = await apiService.createReview(reviewData);
-        dispatch({ type: actionTypes.ADD_REVIEW, payload: response.data });
-        
-  
-        if (state.session) {
-          const updatedSession = {
-            ...state.session,
-            user_reviews: [...(state.session.user_reviews || []), response.data.id],
-            created_reviews_count: (state.session.created_reviews_count || 0) + 1
-          };
-          dispatch({ type: actionTypes.SET_SESSION, payload: updatedSession });
-        }
-        
-        toast.success('Code review created successfully!');
-        return response.data;
-      } catch (error) {
-        console.error('Failed to create review:', error);
-        throw error;
-      }
-    },
-    
-    async fetchReview(id) {
-      dispatch({ type: actionTypes.SET_CURRENT_REVIEW_LOADING, payload: true });
-      try {
-        const response = await apiService.getReview(id);
-        dispatch({ type: actionTypes.SET_CURRENT_REVIEW, payload: response.data });
-        return response.data;
-      } catch (error) {
-        console.error('Failed to fetch review:', error);
-        dispatch({ type: actionTypes.SET_CURRENT_REVIEW_LOADING, payload: false });
-        throw error;
-      }
-    },
-    
-    async deleteReview(id) {
-      try {
-        await apiService.deleteReview(id);
-        dispatch({ type: actionTypes.DELETE_REVIEW, payload: id });
-        toast.success('Review deleted successfully');
-      } catch (error) {
-        console.error('Failed to delete review:', error);
-        throw error;
-      }
-    },
-    
-  
-    async analyzeReview(id) {
-      dispatch({ type: actionTypes.SET_ANALYZING, payload: true });
-      try {
-        await apiService.analyzeReview(id);
-        
-      
-        const updatedReview = { ...state.currentReview, status: 'analyzing' };
-        dispatch({ type: actionTypes.UPDATE_REVIEW, payload: updatedReview });
-        
-        toast.success('Analysis started! This may take a few moments...');
-      } catch (error) {
-        console.error('Failed to start analysis:', error);
-        dispatch({ type: actionTypes.SET_ANALYZING, payload: false });
-        throw error;
-      } finally {
-        dispatch({ type: actionTypes.SET_ANALYZING, payload: false });
-      }
-    },
-    
-    async bulkAnalyze(reviewIds) {
-      dispatch({ type: actionTypes.SET_ANALYZING, payload: true });
-      try {
-        const response = await apiService.bulkAnalyze(reviewIds);
-        toast.success(`Analysis started for ${response.data.triggered_reviews} reviews`);
-        
-    
-        await actions.fetchReviews();
-      } catch (error) {
-        console.error('Failed to start bulk analysis:', error);
-        throw error;
-      } finally {
-        dispatch({ type: actionTypes.SET_ANALYZING, payload: false });
-      }
-    },
-    
-    
-    async fetchStats() {
-      dispatch({ type: actionTypes.SET_STATS_LOADING, payload: true });
-      try {
-        const response = await apiService.getStats();
-        dispatch({ type: actionTypes.SET_STATS, payload: response.data });
-      } catch (error) {
-        console.error('Failed to fetch stats:', error);
-        dispatch({ type: actionTypes.SET_STATS_LOADING, payload: false });
-      }
-    },
-    
-    updateReview(review) {
-      dispatch({ type: actionTypes.UPDATE_REVIEW, payload: review });
-    },
-    
-    setError(error) {
-      dispatch({ type: actionTypes.SET_ERROR, payload: error });
-    },
-    
-    clearError() {
-      dispatch({ type: actionTypes.CLEAR_ERROR });
-    },
-  };
-  
-  
-  useEffect(() => {
-    actions.fetchSession();
-  }, []);
-  
-  
-  const value = {
-    ...state,
-    ...actions,
-  };
-  
-  return (
-    <AppContext.Provider value={value}>
-      {children}
-    </AppContext.Provider>
-  );
-}
-
-
-export function useApp() {
+export const useApp = () => {
   const context = useContext(AppContext);
   if (!context) {
     throw new Error('useApp must be used within an AppProvider');
   }
   return context;
-}
+};
 
-export default AppContext;
+export const AppProvider = ({ children }) => {
+  const [session, setSession] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentChatSession, setCurrentChatSession] = useState(null);
+
+ 
+  useEffect(() => {
+    initializeSession();
+    fetchStats();
+  }, []);
+
+  const initializeSession = async () => {
+    try {
+      const sessionData = await apiService.getSession();
+      setSession(sessionData);
+    } catch (error) {
+      console.error('Failed to initialize session:', error);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      setIsLoading(true);
+      const statsData = await apiService.getStats();
+      setStats(statsData);
+    } catch (error) {
+      console.error('Failed to fetch stats:', error);
+      toast.error('Failed to load statistics');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  const sendMessage = async (message, sessionId = null) => {
+    try {
+      setIsLoading(true);
+      const response = await apiService.sendMessage(message, sessionId);
+      
+      
+      if (session) {
+        setSession(prev => ({
+          ...prev,
+          total_messages: (prev.total_messages || 0) + 2, // user + assistant
+        }));
+      }
+
+
+      if (response.session_id) {
+        await refreshCurrentChatSession(response.session_id);
+      }
+
+      
+      await fetchStats();
+      
+      return response;
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      toast.error(error.message || 'Failed to send message');
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getChatSessions = async () => {
+    try {
+      setIsLoading(true);
+      return await apiService.getChatSessions();
+    } catch (error) {
+      console.error('Failed to fetch chat sessions:', error);
+      toast.error('Failed to load chat sessions');
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getChatSession = async (id) => {
+    try {
+      setIsLoading(true);
+      const sessionData = await apiService.getChatSession(id);
+      setCurrentChatSession(sessionData);
+      return sessionData;
+    } catch (error) {
+      console.error('Failed to fetch chat session:', error);
+      toast.error('Failed to load chat session');
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const refreshCurrentChatSession = async (sessionId) => {
+    if (currentChatSession?.id === sessionId) {
+      try {
+        const updated = await apiService.getChatSession(sessionId);
+        setCurrentChatSession(updated);
+      } catch (error) {
+        console.error('Failed to refresh chat session:', error);
+      }
+    }
+  };
+
+  const createChatSession = async () => {
+    try {
+      const newSession = await apiService.createChatSession();
+      setCurrentChatSession(newSession);
+      
+    
+      if (session) {
+        setSession(prev => ({
+          ...prev,
+          chat_sessions_count: (prev.chat_sessions_count || 0) + 1,
+        }));
+      }
+
+      toast.success('New chat session created!');
+      return newSession;
+    } catch (error) {
+      console.error('Failed to create chat session:', error);
+      toast.error('Failed to create chat session');
+      throw error;
+    }
+  };
+
+  const deleteChatSession = async (id) => {
+    try {
+      await apiService.deleteChatSession(id);
+      
+      
+      if (session) {
+        setSession(prev => ({
+          ...prev,
+          chat_sessions_count: Math.max((prev.chat_sessions_count || 1) - 1, 0),
+        }));
+      }
+
+   
+      if (currentChatSession?.id === id) {
+        setCurrentChatSession(null);
+      }
+
+  
+      await fetchStats();
+      
+      toast.success('Chat session deleted successfully!');
+    } catch (error) {
+      console.error('Failed to delete chat session:', error);
+      toast.error('Failed to delete chat session');
+      throw error;
+    }
+  };
+
+  const clearSession = async () => {
+    try {
+      await apiService.clearSession();
+      setSession(null);
+      setStats(null);
+      setCurrentChatSession(null);
+      toast.success('Session cleared successfully!');
+      
+      
+      await initializeSession();
+    } catch (error) {
+      console.error('Failed to clear session:', error);
+      toast.error('Failed to clear session');
+      throw error;
+    }
+  };
+
+
+  const createReview = async (data) => {
+    
+    if (data.submission_type === 'text' && data.code_content) {
+      return await sendMessage(data.code_content);
+    }
+    throw new Error('File uploads not supported in chat mode');
+  };
+
+  const getReview = async (id) => {
+
+    return await getChatSession(id);
+  };
+
+  const getReviews = async () => {
+  
+    return await getChatSessions();
+  };
+
+  const value = {
+    
+    session,
+    stats,
+    isLoading,
+    currentChatSession,
+
+   
+    sendMessage,
+    getChatSessions,
+    getChatSession,
+    createChatSession,
+    deleteChatSession,
+    refreshCurrentChatSession,
+
+    
+    fetchStats,
+    clearSession,
+    initializeSession,
+
+    
+    createReview,
+    getReview,
+    getReviews,
+    analyzeReview: () => Promise.resolve(), 
+
+    
+    apiService,
+  };
+
+  return (
+    <AppContext.Provider value={value}>
+      {children}
+    </AppContext.Provider>
+  );
+};

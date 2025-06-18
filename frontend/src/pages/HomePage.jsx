@@ -4,11 +4,11 @@ import { motion } from 'framer-motion';
 import { 
   Code2, 
   Zap, 
-  Shield, 
-  Target, 
+  MessageCircle, 
+  Brain, 
   FileText, 
   BarChart3,
-  Upload,
+  Users,
   CheckCircle,
   AlertTriangle,
   Info
@@ -24,33 +24,33 @@ const HomePage = () => {
 
   const features = [
     {
-      icon: Zap,
-      title: 'AI-Powered Analysis',
-      description: 'Get intelligent code reviews using advanced AI models that understand code patterns and best practices.',
+      icon: Brain,
+      title: 'AI-Powered Assistance',
+      description: 'Get intelligent coding help using advanced AI models that understand programming concepts and best practices.',
       color: 'text-amber-600',
       bg: 'bg-amber-50',
       border: 'border-amber-100',
     },
     {
-      icon: Shield,
-      title: 'Security Scanning',
-      description: 'Detect potential security vulnerabilities and unsafe coding patterns before they become problems.',
+      icon: MessageCircle,
+      title: 'Interactive Chat',
+      description: 'Have natural conversations about coding problems, debugging, and software development concepts.',
       color: 'text-red-600',
       bg: 'bg-red-50',
       border: 'border-red-100',
     },
     {
-      icon: Target,
-      title: 'Performance Optimization',
-      description: 'Identify performance bottlenecks and get suggestions for more efficient code implementations.',
+      icon: Zap,
+      title: 'Instant Solutions',
+      description: 'Get immediate answers to coding questions with explanations and code examples.',
       color: 'text-emerald-600',
       bg: 'bg-emerald-50',
       border: 'border-emerald-100',
     },
     {
       icon: FileText,
-      title: 'Detailed Reports',
-      description: 'Comprehensive analysis reports with line-by-line feedback and actionable improvement suggestions.',
+      title: 'Code Examples',
+      description: 'Receive detailed code snippets and explanations for various programming challenges.',
       color: 'text-blue-600',
       bg: 'bg-blue-50',
       border: 'border-blue-100',
@@ -60,27 +60,26 @@ const HomePage = () => {
   const steps = [
     {
       number: '01',
-      title: 'Upload Code',
-      description: 'Upload your code files or paste code directly into the analyzer.',
-      icon: Upload,
+      title: 'Ask Question',
+      description: 'Type your coding question or describe the problem you are facing.',
+      icon: MessageCircle,
     },
     {
       number: '02',
-      title: 'AI Analysis',
-      description: 'Our AI analyzes your code for quality, security, and performance issues.',
-      icon: Zap,
+      title: 'AI Response',
+      description: 'Our AI analyzes your question and provides detailed explanations and solutions.',
+      icon: Brain,
     },
     {
       number: '03',
-      title: 'Get Results',
-      description: 'Receive detailed feedback with suggestions for improvement.',
+      title: 'Learn & Apply',
+      description: 'Get practical code examples and guidance to implement the solution.',
       icon: CheckCircle,
     },
   ];
 
   return (
     <div className="bg-white min-h-screen">
-      {/* Hero Section */}
       <div className="relative bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-black/20 to-transparent"></div>
         <div className="absolute inset-0 opacity-5">
@@ -105,12 +104,12 @@ const HomePage = () => {
             </div>
             
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
-              AI Code Review
+              AI Coding Assistant
             </h1>
             
             <p className="text-lg sm:text-xl lg:text-2xl text-slate-200 mb-10 max-w-4xl mx-auto leading-relaxed">
-              Get instant, intelligent feedback on your code quality, security, and performance 
-              with our AI-powered analysis tool.
+              Get instant help with coding questions, debugging, and programming concepts 
+              from your intelligent AI assistant.
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
@@ -118,28 +117,26 @@ const HomePage = () => {
                 to="/analyze"
                 className="group inline-flex items-center px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200 hover:from-blue-700 hover:to-indigo-700"
               >
-                <Zap className="h-5 w-5 mr-2 group-hover:animate-pulse" />
-                Analyze Code Now
+                <MessageCircle className="h-5 w-5 mr-2 group-hover:animate-pulse" />
+                Start Coding Chat
               </Link>
             </div>
           </motion.div>
         </div>
         
-        {/* Floating code snippets background */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-20 left-10 opacity-10 text-white font-mono text-sm rotate-12 select-none">
-            def analyze_code():
+            def solve_problem():
           </div>
           <div className="absolute top-40 right-20 opacity-10 text-white font-mono text-sm -rotate-6 select-none">
-            if security_issue:
+            while learning:
           </div>
           <div className="absolute bottom-32 left-1/4 opacity-10 text-white font-mono text-sm rotate-3 select-none">
-            return feedback
+            return solution
           </div>
         </div>
       </div>
 
-      {/* Stats Section */}
       {stats && (
         <div className="bg-slate-50 py-16 border-b border-slate-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -153,19 +150,19 @@ const HomePage = () => {
                 <div className="text-3xl lg:text-4xl font-bold text-slate-900 mb-2 group-hover:text-blue-600 transition-colors">
                   {stats.total_reviews}
                 </div>
-                <div className="text-slate-600 font-medium">Total Reviews</div>
+                <div className="text-slate-600 font-medium">Total Chats</div>
               </div>
               <div className="text-center group">
                 <div className="text-3xl lg:text-4xl font-bold text-slate-900 mb-2 group-hover:text-emerald-600 transition-colors">
                   {stats.completed_reviews}
                 </div>
-                <div className="text-slate-600 font-medium">Completed</div>
+                <div className="text-slate-600 font-medium">Questions Answered</div>
               </div>
               <div className="text-center group">
                 <div className="text-3xl lg:text-4xl font-bold text-slate-900 mb-2 group-hover:text-amber-600 transition-colors">
                   {stats.analyzing_reviews}
                 </div>
-                <div className="text-slate-600 font-medium">In Progress</div>
+                <div className="text-slate-600 font-medium">Active Sessions</div>
               </div>
               <div className="text-center group">
                 <div className="text-3xl lg:text-4xl font-bold text-slate-900 mb-2 group-hover:text-indigo-600 transition-colors">
@@ -178,7 +175,6 @@ const HomePage = () => {
         </div>
       )}
 
-      {/* Features Section */}
       <div className="py-20 lg:py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
@@ -188,11 +184,11 @@ const HomePage = () => {
             className="text-center mb-16"
           >
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 mb-6">
-              Powerful Code Analysis Features
+              Powerful Coding Assistant Features
             </h2>
             <p className="text-lg sm:text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">
-              Our AI-powered platform provides comprehensive code analysis to help you write better, 
-              more secure, and more efficient code.
+              Our AI-powered assistant helps you learn, debug, and improve your coding skills 
+              with intelligent conversations and practical solutions.
             </p>
           </motion.div>
 
@@ -223,7 +219,6 @@ const HomePage = () => {
         </div>
       </div>
 
-      {/* How it works section */}
       <div className="py-20 lg:py-24 bg-slate-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
@@ -236,7 +231,7 @@ const HomePage = () => {
               How It Works
             </h2>
             <p className="text-lg sm:text-xl text-slate-600">
-              Get started with AI code review in three simple steps
+              Get coding help in three simple steps
             </p>
           </motion.div>
 
@@ -275,7 +270,6 @@ const HomePage = () => {
         </div>
       </div>
 
-      {/* CTA Section */}
       <div className="relative bg-gradient-to-r from-slate-900 via-blue-900 to-indigo-900 py-20 lg:py-24 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-black/20 to-transparent"></div>
         <div className="absolute inset-0 opacity-5">
@@ -291,10 +285,10 @@ const HomePage = () => {
             transition={{ duration: 0.8, delay: 1.4 }}
           >
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-6">
-              Ready to improve your code quality?
+              Ready to enhance your coding skills?
             </h2>
             <p className="text-lg sm:text-xl text-slate-300 mb-10 leading-relaxed">
-              Start analyzing your code with AI-powered insights today.
+              Start chatting with your AI coding assistant today.
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
@@ -302,15 +296,14 @@ const HomePage = () => {
                 to="/analyze"
                 className="group inline-flex items-center px-8 py-4 bg-white text-slate-900 font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200 hover:bg-slate-50"
               >
-                <Zap className="h-5 w-5 mr-2 group-hover:animate-pulse text-blue-600" />
-                Start Free Analysis
+                <MessageCircle className="h-5 w-5 mr-2 group-hover:animate-pulse text-blue-600" />
+                Start Coding Chat
               </Link>
             </div>
           </motion.div>
         </div>
       </div>
 
-      {/* Session info */}
       {session && (
         <div className="bg-blue-50 border-t border-blue-100">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -320,7 +313,7 @@ const HomePage = () => {
                 <Info className="h-4 w-4" />
               </div>
               <span className="font-medium">
-                Session active: {session.created_reviews_count || 0} reviews created
+                Session active: {session.total_messages || session.created_reviews_count || 0} messages sent
               </span>
             </div>
           </div>
